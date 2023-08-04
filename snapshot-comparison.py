@@ -79,10 +79,10 @@ for looping_column in other_columns:
   
   comparison_dataframe = comparison_dataframe.union(temp_df)
 
-comparison_dataframe = comparison_dataframe.withColumn("snapshot_timestamp",lit(SnapshotTime).cast(TimestampType()))
-comparison_dataframe = comparison_dataframe.withColumn("TableName",lit(TableName))
-comparison_dataframe = comparison_dataframe.withColumn("old_snapshot_timestamp",lit(snapshot_previous_ts['snapshot_timestamp']))
-comparison_dataframe = comparison_dataframe.withColumn("new_snapshot_timestamp",lit(snapshot_current_ts['snapshot_timestamp']))
+comparison_dataframe = comparison_dataframe.withColumn("snapshot_timestamp",lit(SnapshotTime).cast(TimestampType()))\
+                                           .withColumn("TableName",lit(TableName))\
+                                           .withColumn("old_snapshot_timestamp",lit(snapshot_previous_ts['snapshot_timestamp']))\
+                                           .withColumn("new_snapshot_timestamp",lit(snapshot_current_ts['snapshot_timestamp']))
 
 
 #Write the data frame as a delta table. 
