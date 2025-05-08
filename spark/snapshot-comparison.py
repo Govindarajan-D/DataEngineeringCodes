@@ -1,12 +1,3 @@
-# Snapshot comparison program that can compare two data snapshots and return a set of rows that contains the changes made on each column
-# This program can run in Spark and Databricks
-
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, max, lit, when, sha2, col, concat_ws, when
-from pyspark.sql.types import StringType,TimestampType,StructType,StructField
-import ast
-import sys
-
 ## PARAMS
 
 #Pass the table name of the table that contains the snapshots and the timestamp of snapshot to compare
@@ -20,6 +11,15 @@ other_columns = ["OtherCol1","OtherCol2"]
 
 #Pass the schema datatype of the key columns as dictionary
 schema_string = "{'Key1':'StringType','Key2':'StringType'}"
+# Snapshot comparison program that can compare two data snapshots and return a set of rows that contains the changes made on each column
+# This program can run in Spark and Databricks
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, max, lit, when, sha2, col, concat_ws, when
+from pyspark.sql.types import StringType, TimestampType, StructType, StructField, IntegerType
+import ast
+import sys
+
 
 ## CODE
 
@@ -71,19 +71,22 @@ comparison_dataframe = spark_session.createDataFrame(data=emptyRDD,schema=compar
 snapshot_comparison_new_columns = ["Attribute","PrevValue","CurrValue","ChangedOn"]
 
 for looping_column in other_columns:
-  temp_df = joined_data.withColumn("Attribute",when(~(data_current[looping_column].eqNullSafe(data_previous[looping_column])),looping_column))\
-  .withColumn("PrevValue",when(~(data_current[looping_column].eqNullSafe(data_previous[looping_column])),data_previous[looping_column]))\
-  .withColumn("CurrValue",when(~(data_current[looping_column].eqNullSafe(data_previous[looping_column])),data_current[looping_column]))\
-  .withColumn("ChangedOn",data_current['snapshot_timestamp']).select(data_current["*"],*snapshot_comparison_new_columns)\
-  .select(*key_columns,*snapshot_comparison_new_columns)
-  
+  temp_df = joined_data.filter(~(data_current[looping_column].eqNullSafe(data_previous[looping_column])))
+  temp_df = temp_df.select(
+                           lit(looping_column).alias("Attribute"), 
+                           data_previous[looping_column].alias("PrevValue"),
+                           data_current[looping_column].alias("CurrValue"),
+                           data_current['snapshot_timestamp'].alias("ChangedOn"),
+                           data_current["*"],
+                           *snapshot_comparison_new_columns
+                           ).select(*key_columns, *snapshot_comparison_new_columns)
+                               
   comparison_dataframe = comparison_dataframe.union(temp_df)
 
-comparison_dataframe = comparison_dataframe.withColumn("snapshot_timestamp",lit(SnapshotTime).cast(TimestampType()))\
-                                           .withColumn("TableName",lit(TableName))\
-                                           .withColumn("old_snapshot_timestamp",lit(snapshot_previous_ts['snapshot_timestamp']))\
-                                           .withColumn("new_snapshot_timestamp",lit(snapshot_current_ts['snapshot_timestamp']))
-
+comparison_dataframe = comparison_dataframe.select(lit(TableName).alias("TableName"),
+                                                   "*", 
+                                                   lit(snapshot_previous_ts['snapshot_timestamp']).alias("old_snapshot_timestamp"),
+                                                   lit(snapshot_current_ts['snapshot_timestamp']).alias("new_snapshot_timestamp"))
 
 #Write the data frame as a delta table. 
-comparison_dataframe.filter("Attribute is not null").write.format('delta').option("mergeSchema", "true").mode("append").save("table_path")
+comparison_dataframe.filter("Attribute is not null").write.format('delta').option("mergeSchema", "true").mode("append").saveAsTable("order_comparison")
